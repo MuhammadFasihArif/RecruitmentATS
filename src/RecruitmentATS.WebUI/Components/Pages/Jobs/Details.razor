@@ -1,0 +1,208 @@
+@page "/jobs/{Id:guid}"
+@using RecruitmentATS.Application.DTOs
+@using RecruitmentATS.Application.Interfaces
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Http
+@inject IJobService JobService
+@inject IApplicationService ApplicationService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Job Details</PageTitle>
+
+<div class="container mt-4">
+    @if (job == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="card-title">@job.Title</h2>
+                <h5 class="card-subtitle mb-3 text-muted">@job.Location</h5>
+                <hr />
+                <div class="mb-3">
+                    <h5>Description</h5>
+                    <p style="white-space: pre-wrap;">@job.Description</p>
+                </div>
+                <div class="mb-3">
+                    <h5>Requirements</h5>
+                    <p style="white-space: pre-wrap;">@job.Requirements</p>
+                </div>
+                @if (job.SalaryRangeMin.HasValue || job.SalaryRangeMax.HasValue)
+                {
+                    <div class="mb-3">
+                        <h5>Salary Range</h5>
+                        <p>
+                            @(job.SalaryRangeMin.HasValue ? $"{job.SalaryRangeMin:C}" : "") 
+                            - 
+                            @(job.SalaryRangeMax.HasValue ? $"{job.SalaryRangeMax:C}" : "")
+                        </p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Apply for this position</h3>
+            </div>
+            <div class="card-body">
+                @if (submitted)
+                {
+                    <div class="alert alert-success">
+                        <h4 class="alert-heading">Application submitted successfully!</h4>
+                        <p>Thank you for applying. We have received your application.</p>
+                        <hr>
+                        <div class="mb-0">
+                            <h5>ATS Compatibility Score: @atsScore/100</h5>
+                            <div class="progress mb-3" style="height: 25px;">
+                                <div class="progress-bar bg-@(atsScore >= 70 ? "success" : (atsScore >= 40 ? "warning" : "danger"))" 
+                                     role="progressbar" 
+                                     style="width: @atsScore%;" 
+                                     aria-valuenow="@atsScore" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    @atsScore%
+                                </div>
+                            </div>
+                            <p style="white-space: pre-wrap;" class="small text-muted">@matchDetails</p>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-primary" @onclick="NavigateToJobs">Back to Jobs</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <EditForm Model="@applyRequest" OnValidSubmit="HandleValidSubmit" FormName="ApplicationForm">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger">@errorMessage</div>
+                        }
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">First Name</label>
+                                <InputText class="form-control" @bind-Value="applyRequest.FirstName" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Last Name</label>
+                                <InputText class="form-control" @bind-Value="applyRequest.LastName" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <InputText class="form-control" @bind-Value="applyRequest.Email" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Phone</label>
+                            <InputText class="form-control" @bind-Value="applyRequest.Phone" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">LinkedIn URL</label>
+                            <InputText class="form-control" @bind-Value="applyRequest.LinkedInUrl" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Resume (PDF/DOCX)</label>
+                            <InputFile OnChange="LoadFiles" class="form-control" accept=".pdf,.docx" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" disabled="@isSubmitting">
+                            @if (isSubmitting)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span> Submitting...</span>
+                            }
+                            else
+                            {
+                                <span>Submit Application</span>
+                            }
+                        </button>
+                    </EditForm>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private JobDto? job;
+    private ApplyToJobRequest applyRequest = new();
+    private bool submitted = false;
+    private bool isSubmitting = false;
+    private IBrowserFile? uploadedFile;
+    private string errorMessage = "";
+    private int atsScore = 0;
+    private string matchDetails = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        job = await JobService.GetJobByIdAsync(Id);
+        if (job == null)
+        {
+            Navigation.NavigateTo("/jobs");
+        }
+    }
+
+    private void LoadFiles(InputFileChangeEventArgs e)
+    {
+        uploadedFile = e.File;
+    }
+    
+    private void NavigateToJobs()
+    {
+        Navigation.NavigateTo("/jobs");
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        isSubmitting = true;
+        errorMessage = ""; // Clear previous errors
+        try
+        {
+            if (uploadedFile != null)
+            {
+                 var ms = new MemoryStream();
+                 await uploadedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024).CopyToAsync(ms);
+                 ms.Position = 0;
+                 
+                 var formFile = new FormFile(ms, 0, ms.Length, "ResumeFile", uploadedFile.Name)
+                 {
+                     Headers = new HeaderDictionary(),
+                     ContentType = uploadedFile.ContentType
+                 };
+                 
+                 applyRequest.ResumeFile = formFile;
+            }
+
+            var result = await ApplicationService.ApplyToJobAsync(Id, applyRequest);
+            atsScore = result.AtsScore;
+            matchDetails = result.MatchDetails ?? "";
+            submitted = true;
+            StateHasChanged();
+            // Removed auto-redirect to let user see score
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+            Console.WriteLine($"Application submission error: {ex}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}
+

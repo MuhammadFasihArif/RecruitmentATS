@@ -1,0 +1,222 @@
+@page "/admin/jobs"
+@using RecruitmentATS.Application.DTOs
+@using RecruitmentATS.Application.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject IJobService JobService
+@inject NavigationManager Navigation
+
+<PageTitle>Admin - Manage Jobs</PageTitle>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Manage Jobs</h1>
+        <button class="btn btn-primary" @onclick="ShowCreateForm">
+            <span class="bi bi-plus-circle"></span> Create New Job
+        </button>
+    </div>
+
+    @if (showForm)
+    {
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>@(editingJob == null ? "Create New Job" : "Edit Job")</h5>
+            </div>
+            <div class="card-body">
+                <EditForm Model="jobRequest" OnValidSubmit="SaveJob">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger" />
+
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <InputText class="form-control" @bind-Value="jobRequest.Title" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <InputTextArea class="form-control" rows="4" @bind-Value="jobRequest.Description" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Location</label>
+                        <InputText class="form-control" @bind-Value="jobRequest.Location" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Requirements</label>
+                        <InputTextArea class="form-control" rows="4" @bind-Value="jobRequest.Requirements" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Salary Min</label>
+                            <InputNumber class="form-control" @bind-Value="jobRequest.SalaryRangeMin" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Salary Max</label>
+                            <InputNumber class="form-control" @bind-Value="jobRequest.SalaryRangeMax" />
+                        </div>
+                    </div>
+
+                    @if (editingJob != null)
+                    {
+                        <div class="mb-3 form-check">
+                            <InputCheckbox class="form-check-input" id="isActive" @bind-Value="updateRequest.IsActive" />
+                            <label class="form-check-label" for="isActive">
+                                Active (Open for applications)
+                            </label>
+                        </div>
+                    }
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+
+    @if (jobs == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!jobs.Any())
+    {
+        <p>No jobs found.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Location</th>
+                        <th>Salary Range</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in jobs)
+                    {
+                        <tr>
+                            <td>@job.Title</td>
+                            <td>@job.Location</td>
+                            <td>
+                                @if (job.SalaryRangeMin.HasValue && job.SalaryRangeMax.HasValue)
+                                {
+                                    <text>$@job.SalaryRangeMin.Value.ToString("N0") - $@job.SalaryRangeMax.Value.ToString("N0")</text>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge bg-@(job.IsActive ? "success" : "secondary")">
+                                    @(job.IsActive ? "Open" : "Closed")
+                                </span>
+                            </td>
+                            <td>@job.CreatedAt.ToShortDateString()</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" @onclick="() => EditJob(job)">
+                                        <span class="bi bi-pencil"></span> Edit
+                                    </button>
+                                    <button class="btn btn-outline-danger" @onclick="() => DeleteJob(job.Id)">
+                                        <span class="bi bi-trash"></span> Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IEnumerable<JobDto>? jobs;
+    private bool showForm = false;
+    private JobDto? editingJob = null;
+    private CreateJobRequest jobRequest = new();
+    private UpdateJobRequest updateRequest = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobs();
+    }
+
+    private async Task LoadJobs()
+    {
+        jobs = await JobService.GetAllJobsAsync();
+    }
+
+    private void ShowCreateForm()
+    {
+        editingJob = null;
+        jobRequest = new CreateJobRequest();
+        showForm = true;
+    }
+
+    private void EditJob(JobDto job)
+    {
+        editingJob = job;
+        jobRequest = new CreateJobRequest
+        {
+            Title = job.Title,
+            Description = job.Description,
+            Location = job.Location,
+            Requirements = job.Requirements,
+            SalaryRangeMin = job.SalaryRangeMin,
+            SalaryRangeMax = job.SalaryRangeMax
+        };
+        updateRequest = new UpdateJobRequest
+        {
+            Title = job.Title,
+            Description = job.Description,
+            Location = job.Location,
+            Requirements = job.Requirements,
+            SalaryRangeMin = job.SalaryRangeMin,
+            SalaryRangeMax = job.SalaryRangeMax,
+            IsActive = job.IsActive
+        };
+        showForm = true;
+    }
+
+    private async Task SaveJob()
+    {
+        if (editingJob == null)
+        {
+            await JobService.CreateJobAsync(jobRequest);
+        }
+        else
+        {
+            updateRequest.Title = jobRequest.Title;
+            updateRequest.Description = jobRequest.Description;
+            updateRequest.Location = jobRequest.Location;
+            updateRequest.Requirements = jobRequest.Requirements;
+            updateRequest.SalaryRangeMin = jobRequest.SalaryRangeMin;
+            updateRequest.SalaryRangeMax = jobRequest.SalaryRangeMax;
+            
+            await JobService.UpdateJobAsync(editingJob.Id, updateRequest);
+        }
+
+        showForm = false;
+        await LoadJobs();
+    }
+
+    private void CancelEdit()
+    {
+        showForm = false;
+        editingJob = null;
+    }
+
+    private async Task DeleteJob(Guid jobId)
+    {
+        if (await JobService.DeleteJobAsync(jobId))
+        {
+            await LoadJobs();
+        }
+    }
+}

@@ -1,0 +1,71 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Login</PageTitle>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Login</h3>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <form method="post" action="/account/login" @onsubmit="HandleSubmit" @onsubmit:preventDefault="false">
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email address</label>
+                        <input type="email" class="form-control" id="email" name="email" @bind="email" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" @bind="password" required />
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Sign In</button>
+                    </div>
+                </form>
+
+                <div class="mt-3 text-center">
+                    <small class="text-muted">
+                        Default Admin: admin@recruitmentats.com / Admin@123
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string errorMessage = "";
+
+    [SupplyParameterFromQuery]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized()
+    {
+        ReturnUrl ??= "/";
+        if (!string.IsNullOrEmpty(Error))
+        {
+            errorMessage = "Invalid email or password. Please try again.";
+        }
+    }
+
+    private void HandleSubmit()
+    {
+        // Form will submit normally to /account/login
+        // This is just to clear any client-side validation if needed
+    }
+}

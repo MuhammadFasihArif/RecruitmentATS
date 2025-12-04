@@ -1,0 +1,163 @@
+@page "/admin/applications"
+@using RecruitmentATS.Application.DTOs
+@using RecruitmentATS.Application.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject IApplicationService ApplicationService
+@inject NavigationManager Navigation
+
+<PageTitle>Admin - Applications</PageTitle>
+
+<div class="container mt-4">
+    <h1>Applications</h1>
+    
+    @if (applications == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!applications.Any())
+    {
+        <p>No applications found.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Job Title</th>
+                        <th>Candidate Name</th>
+                        <th>Email</th>
+                        <th>Applied Date</th>
+                        <th>Status</th>
+                        <th>ATS Score</th>
+                        <th>Resume</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var app in applications)
+                    {
+                        <tr>
+                            <td>@app.JobTitle</td>
+                            <td>@(string.IsNullOrEmpty(app.CandidateName) ? "N/A" : app.CandidateName)</td>
+                            <td>@(string.IsNullOrEmpty(app.CandidateEmail) ? "N/A" : app.CandidateEmail)</td>
+                            <td>@app.AppliedAt.ToLocalTime().ToString("g")</td>
+                            <td>
+                                <span class="badge bg-@(GetStatusColor(app.Status.ToString()))">@app.Status</span>
+                            </td>
+                            <td>
+                                @if (app.AtsScore > 0)
+                                {
+                                    <span class="badge bg-@(app.AtsScore >= 70 ? "success" : (app.AtsScore >= 40 ? "warning" : "danger"))">
+                                        @app.AtsScore%
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(app.ResumeUrl))
+                                {
+                                    <a href="@GetResumeLink(app.ResumeUrl)" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-file-earmark-pdf"></i> View
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No Resume</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    @if (!string.IsNullOrEmpty(app.Notes))
+                                    {
+                                        <button class="btn btn-outline-info" @onclick="() => ShowParsedCV(app)">
+                                            <span class="bi bi-file-text"></span> Parsed
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (selectedApplication != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Parsed CV - @selectedApplication.CandidateName</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre style="white-space: pre-wrap; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">@selectedApplication.Notes</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IEnumerable<ApplicationDto>? applications;
+    private ApplicationDto? selectedApplication;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // In a real app, we should check for Admin role here
+        await LoadApplications();
+    }
+
+    private async Task LoadApplications()
+    {
+        applications = await ApplicationService.GetAllApplicationsAsync();
+    }
+
+    private void ShowParsedCV(ApplicationDto app)
+    {
+        selectedApplication = app;
+    }
+
+    private void CloseModal()
+    {
+        selectedApplication = null;
+    }
+
+    private string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Applied" => "primary",
+            "InterviewScheduled" => "info",
+            "Interviewed" => "warning",
+            "OfferExtended" => "success",
+            "Hired" => "success",
+            "Rejected" => "danger",
+            "Withdrawn" => "secondary",
+            _ => "secondary"
+        };
+    }
+
+    private string GetResumeLink(string path)
+    {
+        // path is stored as "uploads\resumes\filename.pdf" or similar
+        // We need to convert it to a web-friendly URL: "/uploads/resumes/filename.pdf"
+        
+        var relativePath = path.Replace("\\", "/");
+        if (!relativePath.StartsWith("/"))
+        {
+            relativePath = "/" + relativePath;
+        }
+        return relativePath;
+    }
+}

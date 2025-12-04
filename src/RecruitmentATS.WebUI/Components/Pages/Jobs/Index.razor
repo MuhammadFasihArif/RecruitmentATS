@@ -1,0 +1,70 @@
+@page "/jobs"
+@using RecruitmentATS.Application.DTOs
+@using RecruitmentATS.Application.Interfaces
+@inject IJobService JobService
+@inject NavigationManager Navigation
+
+<PageTitle>Jobs</PageTitle>
+
+<div class="container mt-4">
+    <h1>Open Positions</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search jobs..." @bind="searchTerm" @bind:event="oninput" @onkeyup="SearchJobs" />
+                <button class="btn btn-primary" @onclick="SearchJobs">Search</button>
+            </div>
+        </div>
+    </div>
+
+    @if (jobs == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!jobs.Any())
+    {
+        <p>No jobs found.</p>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var job in jobs)
+            {
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">@job.Title</h5>
+                            <h6 class="card-subtitle mb-2 text-muted">@job.Location</h6>
+                            <p class="card-text">@job.Description.Substring(0, Math.Min(100, job.Description.Length))...</p>
+                            <a href="/jobs/@job.Id" class="btn btn-outline-primary">View Details</a>
+                        </div>
+                        <div class="card-footer text-muted">
+                            Posted on @job.CreatedAt.ToShortDateString()
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private IEnumerable<JobDto>? jobs;
+    private string searchTerm = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadJobs();
+    }
+
+    private async Task LoadJobs()
+    {
+        jobs = await JobService.GetAllJobsAsync(searchTerm, isActive: true);
+    }
+
+    private async Task SearchJobs()
+    {
+        await LoadJobs();
+    }
+}

@@ -1,0 +1,139 @@
+@page "/my-applications"
+@using RecruitmentATS.Application.DTOs
+@using RecruitmentATS.Application.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IApplicationService ApplicationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>My Applications</PageTitle>
+
+<div class="container mt-4">
+    <h2>My Applications</h2>
+
+    @if (applications == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!applications.Any())
+    {
+        <div class="alert alert-info">
+            You haven't applied to any jobs yet. <a href="/jobs">Browse Jobs</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Job Title</th>
+                        <th>Applied Date</th>
+                        <th>Status</th>
+                        <th>ATS Score</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var app in applications)
+                    {
+                        <tr>
+                            <td>@app.JobTitle</td>
+                            <td>@app.AppliedAt.ToLocalTime().ToString("g")</td>
+                            <td>
+                                <span class="badge bg-@(GetStatusColor(app.Status.ToString()))">@app.Status</span>
+                            </td>
+                            <td>
+                                @if (app.AtsScore > 0)
+                                {
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 10px; width: 100px;">
+                                            <div class="progress-bar bg-@(app.AtsScore >= 70 ? "success" : (app.AtsScore >= 40 ? "warning" : "danger"))" 
+                                                 role="progressbar" 
+                                                 style="width: @app.AtsScore%;" 
+                                                 aria-valuenow="@app.AtsScore" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <span>@app.AtsScore%</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">N/A</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowDetails(app)">
+                                    View Report
+                                </button>
+                            </td>
+                        </tr>
+                        @if (selectedApplication?.Id == app.Id)
+                        {
+                            <tr>
+                                <td colspan="5">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6>ATS Analysis Report</h6>
+                                            <p style="white-space: pre-wrap;">@(string.IsNullOrEmpty(app.MatchDetails) ? "No detailed analysis available." : app.MatchDetails)</p>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IEnumerable<ApplicationDto>? applications;
+    private ApplicationDto? selectedApplication;
+    private string userEmail = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            userEmail = user.Identity.Name ?? "";
+            // Note: In a real app, we should filter by CandidateId or Email in the backend
+            // For now, we'll fetch all and filter client-side since we don't have a specific endpoint for "My Applications" yet
+            // Ideally, we should add GetApplicationsByCandidateEmail to the service
+            var allApps = await ApplicationService.GetAllApplicationsAsync();
+            applications = allApps.Where(a => a.CandidateEmail == userEmail).OrderByDescending(a => a.AppliedAt);
+        }
+    }
+
+    private void ShowDetails(ApplicationDto app)
+    {
+        if (selectedApplication?.Id == app.Id)
+        {
+            selectedApplication = null; // Toggle off
+        }
+        else
+        {
+            selectedApplication = app;
+        }
+    }
+
+    private string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Applied" => "primary",
+            "Interviewing" => "info",
+            "Offer" => "success",
+            "Rejected" => "danger",
+            _ => "secondary"
+        };
+    }
+}
